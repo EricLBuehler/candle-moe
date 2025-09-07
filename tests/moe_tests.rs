@@ -130,11 +130,11 @@ fn fused_moe() -> Result<()> {
 
     let now = Instant::now();
     let naive_moe_output = forward_moe_expert(
-        &hidden_states.clone(),
+        &hidden_states,
         &gate_weights.permute((0, 2, 1))?,
         &up_weights.permute((0, 2, 1))?,
-        &scores.clone(),
-        &indices.clone(),
+        &scores,
+        &indices,
         n_embed,
         num_experts,
     )?;

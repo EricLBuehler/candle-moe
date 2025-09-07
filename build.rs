@@ -5,11 +5,9 @@ use anyhow::{Context, Result};
 use std::path::PathBuf;
 
 const KERNEL_FILES: [&str; 3] = [
-    "kernels/topk_softmax_kernels.cu",
+    "kernels/topk_softmax.cu",
     "kernels/fused_moe.cu",
     "kernels/indexed_matmul.cu",
-    // "kernels/moe_align_sum_kernels.cu",
-    // "kernels/moe_wna16.cu",
 ];
 
 fn main() -> Result<()> {
@@ -17,7 +15,6 @@ fn main() -> Result<()> {
     for kernel_file in KERNEL_FILES.iter() {
         println!("cargo:rerun-if-changed={kernel_file}");
     }
-    println!("cargo:rerun-if-changed=kernels/moe_wna16_utils.h");
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").context("OUT_DIR not set")?);
     let build_dir = match std::env::var("CANDLE_MOE_BUILD_DIR") {

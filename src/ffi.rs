@@ -1,4 +1,4 @@
-use core::ffi::{c_int, c_long, c_void};
+use core::ffi::{c_int, c_void};
 
 unsafe extern "C" {
     pub(crate) fn topk_softmax(
@@ -8,7 +8,7 @@ unsafe extern "C" {
         token_expert_indices: *const c_void,
 
         num_experts: c_int,
-        num_tokens: c_long,
+        num_tokens: c_int,
         topk: c_int,
     );
 
