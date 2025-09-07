@@ -385,8 +385,6 @@ impl FusedMoeForward {
             _ => candle::bail!("output must be a cuda tensor"),
         };
 
-        let stream = 0;
-
         match (input.dtype(), expert_indices.dtype()) {
             (DType::F32, DType::U32) => {
                 let input_slice = input_cuda
@@ -434,7 +432,6 @@ impl FusedMoeForward {
                         self.num_selected_experts as i32,
                         self.activation.to_int(),
                         2_u32,
-                        stream,
                     );
                 }
             }
@@ -484,7 +481,6 @@ impl FusedMoeForward {
                         self.num_selected_experts as i32,
                         self.activation.to_int(),
                         0_u32,
-                        stream,
                     );
                 }
             }
@@ -534,7 +530,6 @@ impl FusedMoeForward {
                         self.num_selected_experts as i32,
                         self.activation.to_int(),
                         1_u32,
-                        stream,
                     );
                 }
             }
@@ -598,8 +593,6 @@ impl FusedMoeForward {
             _ => candle::bail!("output must be a cuda tensor"),
         };
 
-        let stream = 0_i64;
-
         match (input.dtype(), expert_indices.dtype()) {
             (DType::F32, DType::U32) => {
                 let input_slice = input_cuda
@@ -647,7 +640,6 @@ impl FusedMoeForward {
                         self.num_selected_experts as i32,
                         self.activation.to_int(),
                         2_u32,
-                        stream,
                     );
                 }
             }
@@ -697,7 +689,6 @@ impl FusedMoeForward {
                         self.num_selected_experts as i32,
                         self.activation.to_int(),
                         0_u32,
-                        stream,
                     );
                 }
             }
@@ -747,7 +738,6 @@ impl FusedMoeForward {
                         self.num_selected_experts as i32,
                         self.activation.to_int(),
                         1_u32,
-                        stream,
                     );
                 }
             }

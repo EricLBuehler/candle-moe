@@ -6,16 +6,6 @@
 #include <stdio.h>
 #include <algorithm>
 
-#define CUDA_CHECK(call)                                                       \
-  do {                                                                         \
-    cudaError_t err = call;                                                    \
-    if (err != cudaSuccess) {                                                  \
-      fprintf(stderr, "CUDA error at %s:%d: %s\n", __FILE__, __LINE__,         \
-              cudaGetErrorString(err));                                        \
-      exit(err);                                                               \
-    }                                                                          \
-  } while (0)
-
 // Block sizes for tiled matrix multiplication
 #define BLOCK_M 64
 #define BLOCK_N 64
@@ -416,9 +406,10 @@ void fused_moe_forward(
     int intermediate_dim,
     int num_selected_experts,
     int activation_type,
-    uint32_t dtype,           // 0 => f16; 1 => bf16; 2 => f32
-    cudaStream_t stream
+    uint32_t dtype           // 0 => f16; 1 => bf16; 2 => f32
 ) {
+    const cudaStream_t stream = 0;
+
     const int threads = 256;
 
     if (dtype == 0) {

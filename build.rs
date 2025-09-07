@@ -63,7 +63,7 @@ fn main() -> Result<()> {
     println!("cargo:rustc-link-search={}", build_dir.display());
     println!("cargo:rustc-link-lib=moe");
     println!("cargo:rustc-link-lib=dylib=cudart");
-    println!("cargo:rustc-link-lib=dylib=stdc++");
+    // println!("cargo:rustc-link-lib=dylib=stdc++");
 
     Ok(())
 }

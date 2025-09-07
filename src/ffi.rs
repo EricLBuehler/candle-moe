@@ -25,7 +25,6 @@ unsafe extern "C" {
         out_dim: i32,
         num_selected_experts: i32,
         dtype: u32,
-        stream: i64,
     );
 
     #[allow(dead_code)]
@@ -40,7 +39,6 @@ unsafe extern "C" {
         out_dim: i32,
         num_selected_experts: i32,
         dtype: u32,
-        stream: i64,
     );
 
     // Fused MoE forward pass
@@ -58,7 +56,6 @@ unsafe extern "C" {
         num_selected_experts: i32,
         activation_type: i32,
         dtype: u32,
-        stream: i64,
     );
 
     // Optimized fused MoE forward pass
@@ -76,6 +73,5 @@ unsafe extern "C" {
     //     num_experts: i32,
     //     activation_type: i32,
     //     dtype: u32,
-    //     stream: i64,
     // );
 }

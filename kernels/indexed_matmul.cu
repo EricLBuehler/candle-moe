@@ -155,9 +155,10 @@ void indexed_matmul(
     int hidden_dim,
     int out_dim,
     int num_selected_experts,
-    uint32_t dtype,           // 0 => f16; 1 => bf16; 2 => f32
-    cudaStream_t stream
+    uint32_t dtype           // 0 => f16; 1 => bf16; 2 => f32
 ) {
+    const cudaStream_t stream = 0;
+
     const int threads = 256;
     dim3 blocks(num_tokens, (out_dim + threads - 1) / threads);
     int expert_stride = hidden_dim * out_dim;
@@ -181,9 +182,10 @@ void indexed_matmul_optimized(
     int hidden_dim,
     int out_dim,
     int num_selected_experts,
-    uint32_t dtype,           // 0 => f16; 1 => bf16; 2 => f32
-    cudaStream_t stream
+    uint32_t dtype           // 0 => f16; 1 => bf16; 2 => f32
 ) {
+    const cudaStream_t stream = 0;
+
     const int threads = 256;
     dim3 blocks(num_tokens, (out_dim + threads - 1) / threads);
     int expert_stride = hidden_dim * out_dim;
