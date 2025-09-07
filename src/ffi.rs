@@ -12,53 +12,70 @@ unsafe extern "C" {
         topk: c_int,
     );
 
-    pub(crate) fn moe_sum(
+    // Indexed matrix multiplication for MoE
+    #[allow(dead_code)]
+    pub(crate) fn indexed_matmul(
         input: *const c_void,
-        output: *const c_void,
-        hidden_size: c_int,
-        num_token: c_long,
-        topk: c_int,
+        expert_weights: *const c_void,
+        routing_weights: *const c_void,
+        expert_indices: *const c_void,
+        output: *mut c_void,
+        num_tokens: i32,
+        hidden_dim: i32,
+        out_dim: i32,
+        num_selected_experts: i32,
         dtype: u32,
+        stream: i64,
     );
 
     #[allow(dead_code)]
-    pub(crate) fn moe_align_block_size(
-        topk_ids: *const c_void,
-        num_experts: c_long,
-        block_size: c_long,
-        numel: c_long,
-        sorted_token_ids: *const c_void,
-        experts_ids: *const c_void,
-        num_tokens_post_pad: *const c_void,
-        dtype: u32,
-    );
-
-    pub(crate) fn moe_wna16_gemm(
+    pub(crate) fn indexed_matmul_optimized(
         input: *const c_void,
-        output: *const c_void,
-        b_qweight: *const c_void,
-        b_scales: *const c_void,
-        b_qzeros: *const c_void,
-        topk_weights: *const c_void,
-        sorted_token_ids: *const c_void,
-        expert_ids: *const c_void,
-        num_tokens_post_pad: *const c_void,
-
-        top_k: c_long,
-        BLOCK_SIZE_M: c_long,
-        BLOCK_SIZE_N: c_long,
-        BLOCK_SIZE_K: c_long,
-        bit: c_long,
-
-        num_experts: c_int,
-        size_m: c_int,
-        size_n: c_int,
-        size_k: c_int,
-        group_size: c_int,
-        EM: c_long,
-        has_zp: bool,
-        mul_topk_weight: bool,
-
+        expert_weights: *const c_void,
+        routing_weights: *const c_void,
+        expert_indices: *const c_void,
+        output: *mut c_void,
+        num_tokens: i32,
+        hidden_dim: i32,
+        out_dim: i32,
+        num_selected_experts: i32,
         dtype: u32,
+        stream: i64,
     );
+
+    // Fused MoE forward pass
+    pub(crate) fn fused_moe_forward(
+        input: *const c_void,
+        gate_weights: *const c_void,
+        up_weights: *const c_void,
+        down_weights: *const c_void,
+        routing_weights: *const c_void,
+        expert_indices: *const c_void,
+        output: *const c_void,
+        num_tokens: i32,
+        hidden_dim: i32,
+        intermediate_dim: i32,
+        num_selected_experts: i32,
+        activation_type: i32,
+        dtype: u32,
+        stream: i64,
+    );
+
+    // Optimized fused MoE forward pass
+    // pub(crate) fn fused_moe_forward_optimized(
+    //     input: *const c_void,
+    //     gate_weights: *const c_void,
+    //     up_weights: *const c_void,
+    //     down_weights: *const c_void,
+    //     routing_weights: *const c_void,
+    //     expert_indices: *const c_void,
+    //     output: *mut c_void,
+    //     num_tokens: i32,
+    //     hidden_dim: i32,
+    //     intermediate_dim: i32,
+    //     num_experts: i32,
+    //     activation_type: i32,
+    //     dtype: u32,
+    //     stream: i64,
+    // );
 }

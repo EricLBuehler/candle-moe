@@ -6,8 +6,10 @@ use std::path::PathBuf;
 
 const KERNEL_FILES: [&str; 3] = [
     "kernels/topk_softmax_kernels.cu",
-    "kernels/moe_align_sum_kernels.cu",
-    "kernels/moe_wna16.cu",
+    "kernels/fused_moe.cu",
+    "kernels/indexed_matmul.cu",
+    // "kernels/moe_align_sum_kernels.cu",
+    // "kernels/moe_wna16.cu",
 ];
 
 fn main() -> Result<()> {
