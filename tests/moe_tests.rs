@@ -96,7 +96,7 @@ fn fused_moe() -> Result<()> {
 
     let n_embed = 4;
     let n_inner = n_embed * 4;
-    let seq_len = 16;
+    let seq_len = 8;
     let num_experts = 8;
     let top_k = 2;
 
@@ -117,12 +117,12 @@ fn fused_moe() -> Result<()> {
 
     let now = Instant::now();
     let fused_moe_output = fused_moe.forward_optimized(
-        &hidden_states,
-        &gate_weights,
-        &up_weights,
-        &down_weights,
-        &scores,
-        &indices,
+        &hidden_states.clone(),
+        &gate_weights.clone(),
+        &up_weights.clone(),
+        &down_weights.clone(),
+        &scores.clone(),
+        &indices.clone(),
     )?;
     println!("elapsed: {:?}", now.elapsed());
 
@@ -130,11 +130,11 @@ fn fused_moe() -> Result<()> {
 
     let now = Instant::now();
     let naive_moe_output = forward_moe_expert(
-        &hidden_states,
+        &hidden_states.clone(),
         &gate_weights.permute((0, 2, 1))?,
         &up_weights.permute((0, 2, 1))?,
-        &scores,
-        &indices,
+        &scores.clone(),
+        &indices.clone(),
         n_embed,
         num_experts,
     )?;

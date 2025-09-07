@@ -1,5 +1,4 @@
 pub mod ffi;
-pub mod moe_ops;
 
 use candle::cuda_backend::cudarc::driver::DevicePtr;
 use candle::{CudaDevice, DType, Device, Result, Storage, Tensor};
