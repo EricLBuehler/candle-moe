@@ -110,19 +110,18 @@ fn fused_moe() -> Result<()> {
         Tensor::randn(0.0, 1.0, (num_experts, n_embed, n_inner), &device)?.to_dtype(DType::F32)?;
     let up_weights =
         Tensor::randn(0.0, 1.0, (num_experts, n_embed, n_inner), &device)?.to_dtype(DType::F32)?;
-    let down_weights = Tensor::ones((num_experts, n_inner, n_embed), DType::F32, &device)?;
 
     let fused_moe =
         candle_moe::FusedMoeForward::new(gate_weights.dim(0)?, top_k, candle_moe::Activation::Silu);
 
     let now = Instant::now();
-    let fused_moe_output = fused_moe.forward_optimized(
-        &hidden_states.clone(),
-        &gate_weights.clone(),
-        &up_weights.clone(),
-        &down_weights.clone(),
-        &scores.clone(),
-        &indices.clone(),
+    let fused_moe_output = fused_moe.forward(
+        &hidden_states,
+        &gate_weights,
+        &up_weights,
+        None,
+        &scores,
+        &indices,
     )?;
     println!("elapsed: {:?}", now.elapsed());
 

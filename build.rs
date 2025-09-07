@@ -69,10 +69,7 @@ fn main() -> Result<()> {
 
     if target.contains("msvc") {
         // nothing to link to
-    } else if target.contains("apple")
-        || target.contains("freebsd")
-        || target.contains("openbsd")
-    {
+    } else if target.contains("apple") || target.contains("freebsd") || target.contains("openbsd") {
         println!("cargo:rustc-link-lib=dylib=c++");
     } else if target.contains("android") {
         println!("cargo:rustc-link-lib=dylib=c++_shared");

@@ -44,7 +44,8 @@ __global__ void fused_moe_kernel(
     int hidden_dim,
     int intermediate_dim,
     int num_selected_experts,
-    int activation_type          // 0: SiLU, 1: GELU, 2: ReLU
+    int activation_type,          // 0: SiLU, 1: GELU, 2: ReLU
+    bool enable_down_projection
 ) {
     extern __shared__ char shared_mem[];
     T* shared_input = (T*)shared_mem;
@@ -77,7 +78,6 @@ __global__ void fused_moe_kernel(
 
         const T* gate_w = gate_weights + expert_id * hidden_dim * intermediate_dim;
         const T* up_w = up_weights + expert_id * hidden_dim * intermediate_dim;
-        const T* down_w = down_weights + expert_id * intermediate_dim * hidden_dim;
 
         // Compute gate and up projections
         for (int i = tid; i < intermediate_dim; i += block_size) {
@@ -102,18 +102,28 @@ __global__ void fused_moe_kernel(
             // Multiply gate and up
             shared_intermediate[i] = T(gate_val * up_val);
         }
+
         __syncthreads();
 
-        // Compute down projection and accumulate to output
-        for (int i = tid; i < hidden_dim; i += block_size) {
-            float down_val = 0.0f;
+        if (enable_down_projection) {
+            const T* down_w = down_weights + expert_id * intermediate_dim * hidden_dim;
 
-            for (int j = 0; j < intermediate_dim; j++) {
-                down_val += float(shared_intermediate[j]) * float(down_w[j * hidden_dim + i]);
+            // Compute down projection and accumulate to output
+            for (int i = tid; i < hidden_dim; i += block_size) {
+                float down_val = 0.0f;
+
+                for (int j = 0; j < intermediate_dim; j++) {
+                    down_val += float(shared_intermediate[j]) * float(down_w[j * hidden_dim + i]);
+                }
+
+                output[token_idx * hidden_dim + i] += T(down_val * routing_weight);
             }
-
-            output[token_idx * hidden_dim + i] += T(down_val * routing_weight);
+        } else {
+            for (int i = tid; i < intermediate_dim; i += block_size) {
+                output[token_idx * intermediate_dim + i] += T(float(shared_intermediate[i]) * routing_weight);
+            }
         }
+
         __syncthreads();
     }
 }
@@ -387,7 +397,8 @@ __global__ void prepare_sorted_pairs(
     hidden_dim,                                                           \
     intermediate_dim,                                                     \
     num_selected_experts,                                                 \
-    activation_type                                                       \
+    activation_type,                                                      \
+    enable_down_projection                                                \
   );
 
 // C interface for optimized fused MoE
@@ -409,8 +420,12 @@ void fused_moe_forward(
     uint32_t dtype           // 0 => f16; 1 => bf16; 2 => f32
 ) {
     const cudaStream_t stream = 0;
-
     const int threads = 256;
+
+    bool enable_down_projection = true;
+    if (down_weights == nullptr) {
+        enable_down_projection = false;
+    }
 
     if (dtype == 0) {
         int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(half);
