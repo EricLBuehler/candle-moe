@@ -45,8 +45,8 @@ fn main() -> Result<()> {
         .out_dir(build_dir.clone())
         .arg("-std=c++17")
         .arg("-O3")
-        // .arg("--compiler-options")
-        // .arg("-fPIC")
+        .arg("--compiler-options")
+        .arg("-fPIC")
         .arg("-U__CUDA_NO_HALF_OPERATORS__")
         .arg("-U__CUDA_NO_HALF_CONVERSIONS__")
         .arg("-U__CUDA_NO_HALF2_OPERATORS__")
@@ -57,13 +57,31 @@ fn main() -> Result<()> {
         .arg("--ptxas-options=-v")
         .arg("--verbose");
 
-    let out_file = build_dir.join("libmoe.a");
+    let target = std::env::var("TARGET").unwrap();
+
+    let out_file = if target.contains("msvc") {
+        build_dir.join("moe.lib")
+    } else {
+        build_dir.join("libmoe.a")
+    };
     builder.build_lib(out_file);
 
     println!("cargo:rustc-link-search={}", build_dir.display());
     println!("cargo:rustc-link-lib=moe");
     println!("cargo:rustc-link-lib=dylib=cudart");
-    // println!("cargo:rustc-link-lib=dylib=stdc++");
+
+    if target.contains("msvc") {
+        // nothing to link to
+    } else if target.contains("apple")
+        || target.contains("freebsd")
+        || target.contains("openbsd")
+    {
+        println!("cargo:rustc-link-lib=dylib=c++");
+    } else if target.contains("android") {
+        println!("cargo:rustc-link-lib=dylib=c++_shared");
+    } else {
+        println!("cargo:rustc-link-lib=dylib=stdc++");
+    }
 
     Ok(())
 }
