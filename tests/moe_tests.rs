@@ -94,9 +94,9 @@ fn forward_moe_expert(
 fn fused_moe() -> Result<()> {
     let device = Device::new_cuda(0)?;
 
-    let n_embed = 4;
+    let n_embed = 8;
     let n_inner = n_embed * 4;
-    let seq_len = 8;
+    let seq_len = 4;
     let num_experts = 8;
     let top_k = 2;
 
@@ -141,10 +141,10 @@ fn fused_moe() -> Result<()> {
 
     println!("naive MoE: {:}", naive_moe_output);
 
-    // assert_eq!(
-    //     to_vec2_round(fused_moe_output, 3)?,
-    //     to_vec2_round(naive_moe_output, 3)?
-    // );
+    assert_eq!(
+        to_vec2_round(fused_moe_output, 4)?,
+        to_vec2_round(naive_moe_output, 4)?
+    );
 
     Ok(())
 }

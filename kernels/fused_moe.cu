@@ -33,18 +33,18 @@ __device__ __forceinline__ float gelu(float x) {
 // Simple optimized fused MoE kernel with shared memory
 template<typename T>
 __global__ void fused_moe_kernel(
-    const T* input,              // [num_tokens, hidden_dim]
-    const T* gate_weights,       // [num_experts, hidden_dim, intermediate_dim]
-    const T* up_weights,         // [num_experts, hidden_dim, intermediate_dim]
-    const T* down_weights,       // [num_experts, intermediate_dim, hidden_dim]
-    const float* routing_weights,// [num_tokens, num_selected_experts]
-    const uint32_t* expert_indices,// [num_tokens, num_selected_experts]
-    T* output,                   // [num_tokens, hidden_dim]
+    const T* __restrict__ input,                  // [num_tokens, hidden_dim]
+    const T* __restrict__ gate_weights,           // [num_experts, hidden_dim, intermediate_dim]
+    const T* __restrict__ up_weights,             // [num_experts, hidden_dim, intermediate_dim]
+    const T* __restrict__ down_weights,           // [num_experts, intermediate_dim, hidden_dim]
+    const float* __restrict__ routing_weights,    // [num_tokens, num_selected_experts]
+    const uint32_t* __restrict__ expert_indices,  // [num_tokens, num_selected_experts]
+    T* __restrict__ output,                       // [num_tokens, hidden_dim]
     int num_tokens,
     int hidden_dim,
     int intermediate_dim,
     int num_selected_experts,
-    int activation_type,          // 0: SiLU, 1: GELU, 2: ReLU
+    int activation_type,             // 0: SiLU, 1: GELU, 2: ReLU
     bool enable_down_projection
 ) {
     extern __shared__ char shared_mem[];
@@ -59,19 +59,16 @@ __global__ void fused_moe_kernel(
         return;
     }
 
-    // Load input to shared memory
     for (int i = tid; i < hidden_dim; i += block_size) {
         shared_input[i] = input[token_idx * hidden_dim + i];
     }
     __syncthreads();
 
-    // Initialize output to zero
     for (int i = tid; i < hidden_dim; i += block_size) {
         output[token_idx * hidden_dim + i] = T(0.0f);
     }
     __syncthreads();
 
-    // Process each selected expert
     for (int k = 0; k < num_selected_experts; k++) {
         int expert_id = expert_indices[token_idx * num_selected_experts + k];
         float routing_weight = routing_weights[token_idx * num_selected_experts + k];
@@ -79,36 +76,32 @@ __global__ void fused_moe_kernel(
         const T* gate_w = gate_weights + expert_id * hidden_dim * intermediate_dim;
         const T* up_w = up_weights + expert_id * hidden_dim * intermediate_dim;
 
-        // Compute gate and up projections
         for (int i = tid; i < intermediate_dim; i += block_size) {
             float gate_val = 0.0f;
-            float up_val = 0.0f;
+            // float up_val = 0.0f;
 
             for (int j = 0; j < hidden_dim; j++) {
                 float input_val = float(shared_input[j]);
                 gate_val += input_val * float(gate_w[j * intermediate_dim + i]);
-                up_val += input_val * float(up_w[j * intermediate_dim + i]);
+                // up_val += input_val * float(up_w[j * intermediate_dim + i]);
             }
 
-            // Apply activation to gate
-            if (activation_type == 0) { // SiLU
-                gate_val = gate_val / (1.0f + expf(-gate_val));
-            } else if (activation_type == 1) { // GELU
-                gate_val = 0.5f * gate_val * (1.0f + tanhf(0.7978845608f * (gate_val + 0.044715f * gate_val * gate_val * gate_val)));
-            } else if (activation_type == 2) { // ReLU
+            if (activation_type == 0) {
+                gate_val = silu(gate_val);
+            } else if (activation_type == 1) {
+                gate_val = gelu(gate_val);
+            } else if (activation_type == 2) {
                 gate_val = fmaxf(0.0f, gate_val);
             }
 
-            // Multiply gate and up
-            shared_intermediate[i] = T(gate_val * up_val);
+            // shared_intermediate[i] = T(gate_val * up_val);
+            shared_intermediate[i] = T(gate_val);
         }
-
         __syncthreads();
 
         if (enable_down_projection) {
             const T* down_w = down_weights + expert_id * intermediate_dim * hidden_dim;
 
-            // Compute down projection and accumulate to output
             for (int i = tid; i < hidden_dim; i += block_size) {
                 float down_val = 0.0f;
 
@@ -119,11 +112,14 @@ __global__ void fused_moe_kernel(
                 output[token_idx * hidden_dim + i] += T(down_val * routing_weight);
             }
         } else {
-            for (int i = tid; i < intermediate_dim; i += block_size) {
-                output[token_idx * intermediate_dim + i] += T(float(shared_intermediate[i]) * routing_weight);
+            for (int i = tid; i < hidden_dim; i += block_size) {
+                float acc = 0.0f;
+                for (int j = 0; j < intermediate_dim; j++) {
+                    acc += float(shared_intermediate[j]) * float(up_w[i * intermediate_dim + j]);
+                }
+                output[token_idx * hidden_dim + i] += T(acc * routing_weight);
             }
         }
-
         __syncthreads();
     }
 }

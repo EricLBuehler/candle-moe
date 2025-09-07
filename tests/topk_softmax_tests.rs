@@ -1,7 +1,6 @@
 use anyhow::Result;
 use candle::{DType, Device, Tensor};
 use candle_transformers::models::deepseek2::{TopKLastDimOp, TopKOutput};
-use std::time::Instant;
 
 fn to_vec2_round(t: Tensor, digits: i32) -> Result<Vec<Vec<f32>>> {
     let b = 10f32.powi(digits);
