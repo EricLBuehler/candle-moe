@@ -76,6 +76,9 @@ __global__ void fused_moe_kernel(
         const T* gate_w = gate_weights + expert_id * hidden_dim * intermediate_dim;
         const T* up_w = up_weights + expert_id * hidden_dim * intermediate_dim;
 
+        // Qwen3 MoE: down(act(gate(inp) @ up(inp)))
+        // Nomic MoE: act(gate(inp)) @ up
+
         for (int i = tid; i < intermediate_dim; i += block_size) {
             float gate_val = 0.0f;
             // float up_val = 0.0f;
