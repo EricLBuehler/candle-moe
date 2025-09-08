@@ -11,7 +11,7 @@ readme = "README.md"
 
 [dependencies]
 candle = { version = "0.8", package = "candle-core", features = ["cuda"] }
-cudarc = { version = "0.13.3", features = ["cuda-12080"], default-features = false }
+cudarc = { version = "0.13.3", default-features = false }
 half = { version = "2.3.1", features = ["num-traits"] }
 
 [build-dependencies]
