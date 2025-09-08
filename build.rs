@@ -4,11 +4,7 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
-const KERNEL_FILES: [&str; 3] = [
-    "kernels/topk_softmax.cu",
-    "kernels/fused_moe.cu",
-    "kernels/indexed_matmul.cu",
-];
+const KERNEL_FILES: [&str; 2] = ["kernels/topk_softmax.cu", "kernels/fused_moe.cu"];
 
 fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=build.rs");

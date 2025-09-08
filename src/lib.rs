@@ -189,9 +189,11 @@ impl FusedMoeForward {
     /// - down_weights: [num_experts, intermediate_dim, hidden_dim]
     /// - routing_weights: [num_tokens, num_selected_experts]
     /// - expert_indices: [num_tokens, num_selected_experts]
+    /// - moe_type: qwen3: 0, nomic: 1
     ///
     /// Returns:
     /// - output: [num_tokens, hidden_dim]
+    #[allow(clippy::too_many_arguments)]
     pub fn forward(
         &self,
         input: &Tensor,
@@ -200,6 +202,7 @@ impl FusedMoeForward {
         down_weights: Option<&Tensor>,
         routing_weights: &Tensor,
         expert_indices: &Tensor,
+        moe_type: u32,
     ) -> Result<Tensor> {
         let device = input.device();
 
@@ -243,6 +246,9 @@ impl FusedMoeForward {
         if nse != self.num_selected_experts || nse2 != self.num_selected_experts {
             candle::bail!("Number of selected experts mismatch");
         }
+        if moe_type > 1 {
+            candle::bail!("moe_type must be one of 0 or 1");
+        }
 
         // Create output tensor
         let output = Tensor::zeros((num_tokens, hidden_dim), input.dtype(), device)?;
@@ -255,6 +261,7 @@ impl FusedMoeForward {
                 down_weights,
                 routing_weights,
                 expert_indices,
+                moe_type,
                 &output,
             ),
             DType::BF16 => self.cuda_fwd::<bf16>(
@@ -264,6 +271,7 @@ impl FusedMoeForward {
                 down_weights,
                 routing_weights,
                 expert_indices,
+                moe_type,
                 &output,
             ),
             DType::F32 => self.cuda_fwd::<f32>(
@@ -273,6 +281,7 @@ impl FusedMoeForward {
                 down_weights,
                 routing_weights,
                 expert_indices,
+                moe_type,
                 &output,
             ),
             dt => {
@@ -294,6 +303,7 @@ impl FusedMoeForward {
         down_weights: Option<&Tensor>,
         routing_weights: &Tensor,
         expert_indices: &Tensor,
+        moe_type: u32,
         output: &Tensor,
     ) -> Result<()> {
         let (num_tokens, hidden_dim) = input.dims2()?;
@@ -401,6 +411,7 @@ impl FusedMoeForward {
                 intermediate_dim as i32,
                 self.num_selected_experts as i32,
                 self.activation.to_int(),
+                moe_type,
                 internal_dtype,
             );
         }

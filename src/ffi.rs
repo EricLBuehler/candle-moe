@@ -12,35 +12,6 @@ unsafe extern "C" {
         topk: c_int,
     );
 
-    // Indexed matrix multiplication for MoE
-    #[allow(dead_code)]
-    pub(crate) fn indexed_matmul(
-        input: *const c_void,
-        expert_weights: *const c_void,
-        routing_weights: *const c_void,
-        expert_indices: *const c_void,
-        output: *mut c_void,
-        num_tokens: i32,
-        hidden_dim: i32,
-        out_dim: i32,
-        num_selected_experts: i32,
-        dtype: u32,
-    );
-
-    #[allow(dead_code)]
-    pub(crate) fn indexed_matmul_optimized(
-        input: *const c_void,
-        expert_weights: *const c_void,
-        routing_weights: *const c_void,
-        expert_indices: *const c_void,
-        output: *mut c_void,
-        num_tokens: i32,
-        hidden_dim: i32,
-        out_dim: i32,
-        num_selected_experts: i32,
-        dtype: u32,
-    );
-
     // Fused MoE forward pass
     pub(crate) fn fused_moe_forward(
         input: *const c_void,
@@ -55,6 +26,7 @@ unsafe extern "C" {
         intermediate_dim: i32,
         num_selected_experts: i32,
         activation_type: i32,
+        moe_type: u32,
         dtype: u32,
     );
 

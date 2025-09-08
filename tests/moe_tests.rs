@@ -119,6 +119,7 @@ fn fused_moe() -> Result<()> {
         None,
         &scores,
         &indices,
+        1_u32,
     )?;
 
     let naive_moe_output = forward_moe_expert(

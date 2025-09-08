@@ -3,7 +3,7 @@ name = "candle-moe"
 version = "0.0.1"
 edition = "2024"
 
-description = "MoE layer for the candle ML framework."
+description = "fused MoE layer for the candle ML framework."
 keywords = ["tensor", "machine-learning"]
 categories = ["science"]
 license = "MIT OR Apache-2.0"

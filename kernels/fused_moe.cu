@@ -30,13 +30,11 @@ __device__ __forceinline__ float gelu(float x) {
     return 0.5f * x * (1.0f + tanhf(0.7978845608f * (x + 0.044715f * x * x * x)));
 }
 
-// Simple optimized fused MoE kernel with shared memory
 template<typename T>
-__global__ void fused_moe_kernel(
+__global__ void nomic_fused_moe_kernel(
     const T* __restrict__ input,                  // [num_tokens, hidden_dim]
     const T* __restrict__ gate_weights,           // [num_experts, hidden_dim, intermediate_dim]
     const T* __restrict__ up_weights,             // [num_experts, hidden_dim, intermediate_dim]
-    const T* __restrict__ down_weights,           // [num_experts, intermediate_dim, hidden_dim]
     const float* __restrict__ routing_weights,    // [num_tokens, num_selected_experts]
     const uint32_t* __restrict__ expert_indices,  // [num_tokens, num_selected_experts]
     T* __restrict__ output,                       // [num_tokens, hidden_dim]
@@ -44,8 +42,7 @@ __global__ void fused_moe_kernel(
     int hidden_dim,
     int intermediate_dim,
     int num_selected_experts,
-    int activation_type,             // 0: SiLU, 1: GELU, 2: ReLU
-    bool enable_down_projection
+    int activation_type             // 0: SiLU, 1: GELU, 2: ReLU
 ) {
     extern __shared__ char shared_mem[];
     T* shared_input = (T*)shared_mem;
@@ -76,17 +73,12 @@ __global__ void fused_moe_kernel(
         const T* gate_w = gate_weights + expert_id * hidden_dim * intermediate_dim;
         const T* up_w = up_weights + expert_id * hidden_dim * intermediate_dim;
 
-        // Qwen3 MoE: down(act(gate(inp) @ up(inp)))
-        // Nomic MoE: act(gate(inp)) @ up
-
         for (int i = tid; i < intermediate_dim; i += block_size) {
             float gate_val = 0.0f;
-            // float up_val = 0.0f;
 
             for (int j = 0; j < hidden_dim; j++) {
                 float input_val = float(shared_input[j]);
                 gate_val += input_val * float(gate_w[j * intermediate_dim + i]);
-                // up_val += input_val * float(up_w[j * intermediate_dim + i]);
             }
 
             if (activation_type == 0) {
@@ -97,31 +89,96 @@ __global__ void fused_moe_kernel(
                 gate_val = fmaxf(0.0f, gate_val);
             }
 
-            // shared_intermediate[i] = T(gate_val * up_val);
             shared_intermediate[i] = T(gate_val);
         }
         __syncthreads();
 
-        if (enable_down_projection) {
-            const T* down_w = down_weights + expert_id * intermediate_dim * hidden_dim;
-
-            for (int i = tid; i < hidden_dim; i += block_size) {
-                float down_val = 0.0f;
-
-                for (int j = 0; j < intermediate_dim; j++) {
-                    down_val += float(shared_intermediate[j]) * float(down_w[j * hidden_dim + i]);
-                }
-
-                output[token_idx * hidden_dim + i] += T(down_val * routing_weight);
+        for (int i = tid; i < hidden_dim; i += block_size) {
+            float acc = 0.0f;
+            for (int j = 0; j < intermediate_dim; j++) {
+                acc += float(shared_intermediate[j]) * float(up_w[i * intermediate_dim + j]);
             }
-        } else {
-            for (int i = tid; i < hidden_dim; i += block_size) {
-                float acc = 0.0f;
-                for (int j = 0; j < intermediate_dim; j++) {
-                    acc += float(shared_intermediate[j]) * float(up_w[i * intermediate_dim + j]);
-                }
-                output[token_idx * hidden_dim + i] += T(acc * routing_weight);
+            output[token_idx * hidden_dim + i] += T(acc * routing_weight);
+        }
+        __syncthreads();
+    }
+}
+
+template<typename T>
+__global__ void qwen3_fused_moe_kernel(
+    const T* __restrict__ input,                  // [num_tokens, hidden_dim]
+    const T* __restrict__ gate_weights,           // [num_experts, hidden_dim, intermediate_dim]
+    const T* __restrict__ up_weights,             // [num_experts, hidden_dim, intermediate_dim]
+    const T* __restrict__ down_weights,           // [num_experts, intermediate_dim, hidden_dim]
+    const float* __restrict__ routing_weights,    // [num_tokens, num_selected_experts]
+    const uint32_t* __restrict__ expert_indices,  // [num_tokens, num_selected_experts]
+    T* __restrict__ output,                       // [num_tokens, hidden_dim]
+    int num_tokens,
+    int hidden_dim,
+    int intermediate_dim,
+    int num_selected_experts,
+    int activation_type             // 0: SiLU, 1: GELU, 2: ReLU
+) {
+    extern __shared__ char shared_mem[];
+    T* shared_input = (T*)shared_mem;
+    T* shared_intermediate = shared_input + hidden_dim;
+
+    const int token_idx = blockIdx.x;
+    const int tid = threadIdx.x;
+    const int block_size = blockDim.x;
+
+    if (token_idx >= num_tokens) {
+        return;
+    }
+
+    for (int i = tid; i < hidden_dim; i += block_size) {
+        shared_input[i] = input[token_idx * hidden_dim + i];
+    }
+    __syncthreads();
+
+    for (int i = tid; i < hidden_dim; i += block_size) {
+        output[token_idx * hidden_dim + i] = T(0.0f);
+    }
+    __syncthreads();
+
+    for (int k = 0; k < num_selected_experts; k++) {
+        int expert_id = expert_indices[token_idx * num_selected_experts + k];
+        float routing_weight = routing_weights[token_idx * num_selected_experts + k];
+
+        const T* gate_w = gate_weights + expert_id * hidden_dim * intermediate_dim;
+        const T* up_w = up_weights + expert_id * hidden_dim * intermediate_dim;
+        const T* down_w = down_weights + expert_id * intermediate_dim * hidden_dim;
+
+        for (int i = tid; i < intermediate_dim; i += block_size) {
+            float gate_val = 0.0f;
+            float up_val = 0.0f;
+
+            for (int j = 0; j < hidden_dim; j++) {
+                float input_val = float(shared_input[j]);
+                gate_val += input_val * float(gate_w[j * intermediate_dim + i]);
+                up_val += input_val * float(up_w[j * intermediate_dim + i]);
             }
+
+            if (activation_type == 0) {
+                gate_val = silu(gate_val);
+            } else if (activation_type == 1) {
+                gate_val = gelu(gate_val);
+            } else if (activation_type == 2) {
+                gate_val = fmaxf(0.0f, gate_val);
+            }
+
+            shared_intermediate[i] = T(gate_val * up_val);
+        }
+        __syncthreads();
+
+        for (int i = tid; i < hidden_dim; i += block_size) {
+            float down_val = 0.0f;
+
+            for (int j = 0; j < intermediate_dim; j++) {
+                down_val += float(shared_intermediate[j]) * float(down_w[j * hidden_dim + i]);
+            }
+
+            output[token_idx * hidden_dim + i] += T(down_val * routing_weight);
         }
         __syncthreads();
     }
@@ -383,21 +440,35 @@ __global__ void prepare_sorted_pairs(
     }
 }
 
-#define CALL_FUSED_MOE_FORWARD(T)                                         \
-  fused_moe_kernel<T><<<num_tokens, threads, shared_mem_size, stream>>>(  \
-    reinterpret_cast<T*>(input),                                          \
-    reinterpret_cast<T*>(gate_weights),                                   \
-    reinterpret_cast<T*>(up_weights),                                     \
-    reinterpret_cast<T*>(down_weights),                                   \
-    routing_weights,                                                      \
-    expert_indices,                                                       \
-    reinterpret_cast<T*>(output),                                         \
-    num_tokens,                                                           \
-    hidden_dim,                                                           \
-    intermediate_dim,                                                     \
-    num_selected_experts,                                                 \
-    activation_type,                                                      \
-    enable_down_projection                                                \
+#define CALL_NOMIC_FUSED_MOE_FORWARD(T)                                         \
+  nomic_fused_moe_kernel<T><<<num_tokens, threads, shared_mem_size, stream>>>(  \
+    reinterpret_cast<T*>(input),                                                \
+    reinterpret_cast<T*>(gate_weights),                                         \
+    reinterpret_cast<T*>(up_weights),                                           \
+    routing_weights,                                                            \
+    expert_indices,                                                             \
+    reinterpret_cast<T*>(output),                                               \
+    num_tokens,                                                                 \
+    hidden_dim,                                                                 \
+    intermediate_dim,                                                           \
+    num_selected_experts,                                                       \
+    activation_type                                                             \
+  );
+
+#define CALL_QWEN3_FUSED_MOE_FORWARD(T)                                         \
+  qwen3_fused_moe_kernel<T><<<num_tokens, threads, shared_mem_size, stream>>>(  \
+    reinterpret_cast<T*>(input),                                                \
+    reinterpret_cast<T*>(gate_weights),                                         \
+    reinterpret_cast<T*>(up_weights),                                           \
+    reinterpret_cast<T*>(down_weights),                                         \
+    routing_weights,                                                            \
+    expert_indices,                                                             \
+    reinterpret_cast<T*>(output),                                               \
+    num_tokens,                                                                 \
+    hidden_dim,                                                                 \
+    intermediate_dim,                                                           \
+    num_selected_experts,                                                       \
+    activation_type                                                             \
   );
 
 // C interface for optimized fused MoE
@@ -416,25 +487,34 @@ void fused_moe_forward(
     int intermediate_dim,
     int num_selected_experts,
     int activation_type,
+    uint32_t moe_type,       // 0 => qwen3, 1 => nomic
     uint32_t dtype           // 0 => f16; 1 => bf16; 2 => f32
 ) {
     const cudaStream_t stream = 0;
     const int threads = 256;
 
-    bool enable_down_projection = true;
-    if (down_weights == nullptr) {
-        enable_down_projection = false;
-    }
-
-    if (dtype == 0) {
-        int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(half);
-        CALL_FUSED_MOE_FORWARD(half);
-    } else if (dtype == 1) {
-        int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(__nv_bfloat16);
-        CALL_FUSED_MOE_FORWARD(__nv_bfloat16);
-    } else {
-        int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(float);
-        CALL_FUSED_MOE_FORWARD(float);
+    if (moe_type == 0) {
+        if (dtype == 0) {
+            int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(half);
+            CALL_QWEN3_FUSED_MOE_FORWARD(half);
+        } else if (dtype == 1) {
+            int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(__nv_bfloat16);
+            CALL_QWEN3_FUSED_MOE_FORWARD(__nv_bfloat16);
+        } else {
+            int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(float);
+            CALL_QWEN3_FUSED_MOE_FORWARD(float);
+        }
+    } else if (moe_type == 1) {
+        if (dtype == 0) {
+            int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(half);
+            CALL_NOMIC_FUSED_MOE_FORWARD(half);
+        } else if (dtype == 1) {
+            int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(__nv_bfloat16);
+            CALL_NOMIC_FUSED_MOE_FORWARD(__nv_bfloat16);
+        } else {
+            int shared_mem_size = (hidden_dim + intermediate_dim) * sizeof(float);
+            CALL_NOMIC_FUSED_MOE_FORWARD(float);
+        }
     }
 }
 
