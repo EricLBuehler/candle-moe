@@ -10,8 +10,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-candle = { version = "0.8", package = "candle-core", features = ["cuda"] }
-cudarc = { version = "0.13.3", default-features = false }
+candle = { version = ">=0.9", package = "candle-core", features = ["cuda"] }
 half = { version = "2.3.1", features = ["num-traits"] }
 
 [build-dependencies]
@@ -20,9 +19,20 @@ bindgen_cuda = "0.1.5"
 
 [dev-dependencies]
 anyhow = { version = "1" }
-candle-nn = { version = "0.8", features = ["cuda"] }
-candle-transformers = { version = "0.8" }
+candle-nn = { version = ">=0.9", features = ["cuda"] }
+candle-transformers = { version = ">=0.9" }
+criterion = "0.8"
 
 [profile.release]
 lto = "fat"
 codegen-units = 1
+
+[[bench]]
+name = "bench_topk_softmax"
+harness = false
+path = "benches/bench_topk_softmax.rs"
+
+[[bench]]
+name = "bench_fused_moe"
+harness = false
+path = "benches/bench_fused_moe.rs"
