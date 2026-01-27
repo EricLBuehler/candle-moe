@@ -1834,7 +1834,8 @@ void fused_moe(
 
     // Check if we can use tensor cores (FP16 only, dimensions aligned, SM70+)
     const bool dims_aligned = (hidden_dim % WMMA_K == 0) && (intermediate_dim % WMMA_N == 0);
-    bool use_tensor_cores = (dtype == 0) && dims_aligned;
+    const bool batch_large_enough = avg_tokens_per_expert >= (TC_BLOCK_M / 4);
+    bool use_tensor_cores = (dtype == 0) && dims_aligned && batch_large_enough;
     if (use_tensor_cores) {
         int device = 0;
         int sm_major = 0;
