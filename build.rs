@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 const KERNEL_FILES: [&str; 4] = [
     "kernels/topk_softmax.cu",
-    "kernels/fused_moe.cu",
+    "kernels/moe.cu",
     "kernels/qwen3_moe.cu",
     "kernels/nomic_moe.cu",
 ];
@@ -60,14 +60,23 @@ fn main() -> Result<()> {
         .arg("--ptxas-options=-v")
         .arg("--verbose");
 
-    // Disable BF16 kernels for SM < 80 (pre-Ampere GPUs)
-    // BF16 WMMA and certain BF16 intrinsics require SM 80+
+    // Architecture-specific kernel configuration
     if let Ok(compute_cap) = std::env::var("CUDA_COMPUTE_CAP")
         && let Ok(cap) = compute_cap.parse::<u32>()
-        && cap < 80
     {
-        println!("cargo:warning=CUDA compute capability {cap} < 80, disabling BF16 kernels");
-        builder = builder.arg("-DNO_BF16_KERNEL");
+        // Disable BF16 kernels for SM < 80 (pre-Ampere GPUs)
+        if cap < 80 {
+            println!("cargo:warning=CUDA compute capability {cap} < 80, disabling BF16 kernels");
+            builder = builder.arg("-DNO_BF16_KERNEL");
+        }
+        // Enable SM80+ async copy kernels for Ampere and newer
+        if cap >= 80 {
+            builder = builder.arg("-DSM80_OR_HIGHER");
+        }
+        // Enable SM90+ wgmma kernels for Hopper and newer
+        if cap >= 90 {
+            builder = builder.arg("-DSM90_OR_HIGHER");
+        }
     }
 
     let target = std::env::var("TARGET").unwrap();

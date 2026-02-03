@@ -170,12 +170,11 @@ fn profile_nomic_with_config(
         seq_len, hidden_size, intermediate_size, num_experts, top_k, dtype
     );
 
-    // --- Setup tensors ---
     let hidden_states =
         Tensor::randn(0.0f32, 1.0, (seq_len, hidden_size), device)?.to_dtype(dtype)?;
     let weights =
         Tensor::randn(0.0f32, 1.0, (seq_len, num_experts), device)?.to_dtype(DType::F32)?;
-    // Nomic: gate and up weights have same shape
+
     let gate_weights = Tensor::randn(
         0.0,
         1.0,
@@ -212,7 +211,6 @@ fn profile_nomic_with_config(
     }
     device.synchronize()?;
 
-    // --- Profiling region ---
     let dtype_str = match dtype {
         DType::F16 => "f16",
         DType::BF16 => "bf16",
@@ -280,18 +278,10 @@ fn main() -> Result<()> {
     // =====================
     // Nomic cases (top_k=2, F16)
     // =====================
-
-    // Small batch - tests the small batch threshold fix
     profile_nomic(&device, 16, 768, iters)?;
     profile_nomic(&device, 32, 768, iters)?;
-
-    // Long sequence - tests tensor core performance
     profile_nomic(&device, 8192, 768, iters)?;
-
-    // Very long sequence
     profile_nomic(&device, 32768, 768, iters)?;
-
-    // Larger Nomic models
     profile_nomic(&device, 8192, 1024, iters)?;
     profile_nomic(&device, 8192, 2048, iters)?;
 
@@ -310,21 +300,14 @@ fn main() -> Result<()> {
     // =====================
     // Qwen3 cases (top_k=2, F16)
     // =====================
-
-    // Qwen3 with 768 hidden_dim (same as Nomic for fair comparison)
     profile_qwen3(&device, 16, 768, iters)?;
     profile_qwen3(&device, 32, 768, iters)?;
     profile_qwen3(&device, 8192, 768, iters)?;
     profile_qwen3(&device, 32768, 768, iters)?;
-
-    // Standard Qwen3 case
     profile_qwen3(&device, 8192, 1024, iters)?;
     profile_qwen3(&device, 16384, 1024, iters)?;
     profile_qwen3(&device, 16384, 4096, iters)?;
 
-    // =====================
-    // Qwen3 top_k=1 (tests memset-free optimization)
-    // =====================
     profile_qwen3_topk1(&device, 8192, 768, iters)?;
     profile_qwen3_topk1(&device, 32768, 768, iters)?;
 
